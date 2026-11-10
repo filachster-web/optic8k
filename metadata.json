@@ -1,0 +1,6 @@
+{
+  "name": "OpticSpec 8K — Детальное описание фото и генератор промтов",
+  "description": "Профессиональный сервис детальной деконструкции фотографий на английском языке (до 4000 знаков) и создания двух независимых 8K-промтов с разной лексикой для точного воссоздания кадра в Grok, Gemini, Claude, ChatGPT и других ИИ.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
