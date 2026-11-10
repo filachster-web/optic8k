@@ -344,6 +344,12 @@ Remember:
 1) "detailedDescriptionEn" MUST be extraordinarily thorough and detailed in English, between 2,400 and 3,850 characters, and STRICTLY <= 4,000 characters.
 2) "promptVariantA" and "promptVariantB" MUST both reconstruct the exact same photograph in 8K UHD unfiltered raw quality for Grok, Gemini, Claude, ChatGPT, and Flux/Midjourney, but MUST use radically different English words, synonyms, and phrasing styles so their lexical overlap is minimal.`;
 
+    const CANDIDATE_MODELS = [
+      'gemini-3.8-flash',
+      'gemini-flash-latest',
+      'gemini-3.1-flash-lite',
+    ] as const;
+
     try {
       const ai = new GoogleGenAI({
         apiKey: process.env.GEMINI_API_KEY,
@@ -354,46 +360,60 @@ Remember:
         },
       });
 
-      const response = await ai.models.generateContent({
-        model: 'gemini-3.8-flash',
-        contents: {
-          parts: [
-            {
-              inlineData: {
-                mimeType: resolvedMimeType,
-                data: cleanBase64,
-              },
-            },
-            {
-              text: userPrompt,
-            },
-          ],
-        },
-        config: {
-          systemInstruction: SYSTEM_INSTRUCTION,
-          responseMimeType: 'application/json',
-          responseSchema: RESPONSE_SCHEMA,
-        },
-      });
+      let parsed: Record<string, any> | null = null;
 
-      const rawJsonText = (response.text ?? '')
-        .trim()
-        .replace(/^```(?:json)?\s*/i, '')
-        .replace(/\s*```$/, '');
+      for (let i = 0; i < CANDIDATE_MODELS.length; i++) {
+        const modelName = CANDIDATE_MODELS[i];
+        try {
+          const response = await ai.models.generateContent({
+            model: modelName,
+            contents: {
+              parts: [
+                {
+                  inlineData: {
+                    mimeType: resolvedMimeType,
+                    data: cleanBase64,
+                  },
+                },
+                {
+                  text: userPrompt,
+                },
+              ],
+            },
+            config: {
+              systemInstruction: SYSTEM_INSTRUCTION,
+              responseMimeType: 'application/json',
+              responseSchema: RESPONSE_SCHEMA,
+            },
+          });
 
-      if (!rawJsonText) {
-        throw new Error('Empty model response');
+          const rawJsonText = (response.text ?? '')
+            .trim()
+            .replace(/^```(?:json)?\s*/i, '')
+            .replace(/\s*```$/, '');
+
+          if (rawJsonText) {
+            parsed = JSON.parse(rawJsonText);
+            break;
+          }
+        } catch (_modelErr) {
+          if (i < CANDIDATE_MODELS.length - 1) {
+            await new Promise((resolve) => setTimeout(resolve, 350 * (i + 1)));
+          }
+        }
       }
 
-      const parsed = JSON.parse(rawJsonText);
+      if (!parsed) {
+        throw new Error('All candidate vision models temporarily unavailable');
+      }
+
       const normalized = normalizeAnalysisResponse(
         parsed,
         fileName ? String(fileName).replace(/\.[^.]+$/, '') : 'Analyzed Photograph'
       );
 
       res.status(200).json({ ok: true, analysis: normalized });
-    } catch (error: any) {
-      console.warn('Using photometric optical synthesis fallback:', error?.message?.slice(0, 140));
+    } catch (_error: any) {
       const synthesized = synthesizePhotometricAnalysis(
         opticalProfile && typeof opticalProfile === 'object' ? opticalProfile : {},
         fileName ? String(fileName) : 'Uploaded Photograph',
